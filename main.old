@@ -1,0 +1,166 @@
+import streamlit as st
+import pandas as pd
+import joblib
+import plotly.express as px
+import plotly.graph_objects as go
+
+# Configuração da página
+st.set_page_config(page_title="Previsão de Renovação de Academia", layout="wide")
+
+# Carregar dados
+@st.cache_data
+def load_data():
+    df = pd.read_csv('gym_membership.csv')
+    return df
+
+df = load_data()
+
+# Carregar modelo treinado (salvo anteriormente)
+@st.cache_resource
+def load_model():
+    return joblib.load('best_model.pkl')
+
+best_model = load_model()
+
+# Sidebar
+st.sidebar.title("Navegação")
+page = st.sidebar.radio("Escolha uma página", ["Visão Geral", "Análise Exploratória", "Modelos e Avaliação", "Previsão Interativa"])
+
+# Página 1: Visão Geral
+if page == "Visão Geral":
+    st.title("Visão Geral do Dataset")
+    st.write("Este dataset contém informações sobre clientes de uma academia e o objetivo é prever a renovação da assinatura.")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total de Registros", df.shape[0])
+    col2.metric("Taxa de Renovação", f"{df['renewed'].mean()*100:.2f}%")
+    col3.metric("Número de Features", df.shape[1]-1)
+
+    st.subheader("Amostra dos Dados")
+    st.dataframe(df.head(10))
+
+    st.subheader("Tipos de Dados")
+    st.write(df.dtypes)
+
+# Página 2: Análise Exploratória
+elif page == "Análise Exploratória":
+    st.title("Análise Exploratória de Dados")
+
+    # Distribuição da variável alvo
+    st.subheader("Distribuição da Variável Alvo")
+    fig = px.pie(df, names='renewed', title='Proporção de Renovações')
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Histogramas de variáveis numéricas
+    st.subheader("Distribuição das Variáveis Numéricas")
+    num_cols = ['age', 'membership_months', 'visits_per_week', 'avg_time_spent', 'monthly_fee', 'pt_sessions']
+    selected_col = st.selectbox("Selecione a variável", num_cols)
+    fig = px.histogram(df, x=selected_col, color='renewed', barmode='overlay', nbins=30)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Relação entre variáveis categóricas e alvo
+    st.subheader("Variáveis Categóricas vs Renovação")
+    cat_cols = ['gender', 'plan_type', 'fitness_level']
+    cat_selected = st.selectbox("Selecione a variável categórica", cat_cols)
+    fig = px.histogram(df, x=cat_selected, color='renewed', barmode='group')
+    st.plotly_chart(fig, use_container_width=True)
+
+# Página 3: Modelos e Avaliação
+elif page == "Modelos e Avaliação":
+    st.title("Modelos de Machine Learning e Avaliação")
+
+    # Carregar resultados salvos (opcional)
+    # Aqui poderíamos exibir uma tabela com métricas dos modelos treinados
+    # Vamos criar um exemplo estático
+    results_df = pd.DataFrame({
+        'Modelo': ['Logistic Regression', 'Random Forest', 'Gradient Boosting', 'XGBoost'],
+        'CV AUC (média)': [0.823, 0.891, 0.875, 0.902],
+        'Test AUC': [0.819, 0.887, 0.872, 0.898],
+        'Accuracy': [0.784, 0.842, 0.835, 0.851]
+    })
+    st.table(results_df)
+
+    st.subheader("Matriz de Confusão do Melhor Modelo")
+    # Aqui podemos carregar ou calcular a matriz
+    # Exemplo:
+    cm = confusion_matrix(y_test, best_model.predict(X_test))
+    fig = px.imshow(cm, text_auto=True, labels=dict(x="Predito", y="Real", color="Contagem"),
+                    x=['Não Renovou', 'Renovou'], y=['Não Renovou', 'Renovou'])
+    st.plotly_chart(fig)
+
+    st.subheader("Curva ROC")
+    y_proba = best_model.predict_proba(X_test)[:,1]
+    fpr, tpr, _ = roc_curve(y_test, y_proba)
+    roc_auc = auc(fpr, tpr)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name=f'ROC (AUC = {roc_auc:.3f})'))
+    fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode='lines', line=dict(dash='dash'), name='Aleatório'))
+    fig.update_layout(title='Curva ROC', xaxis_title='Taxa de Falsos Positivos', yaxis_title='Taxa de Verdadeiros Positivos')
+    st.plotly_chart(fig)
+
+# Página 4: Previsão Interativa
+elif page == "Previsão Interativa":
+    st.title("Previsão para Novo Cliente")
+    st.write("Preencha os dados do cliente para prever a probabilidade de renovação.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        age = st.number_input("Idade", min_value=18, max_value=80, value=30)
+        gender = st.selectbox("Gênero", ['Masculino', 'Feminino'])
+        membership_months = st.number_input("Meses de assinatura", min_value=1, max_value=60, value=12)
+        visits_per_week = st.slider("Visitas por semana", 0, 7, 3)
+        avg_time_spent = st.number_input("Tempo médio por visita (min)", min_value=0, max_value=180, value=60)
+    with col2:
+        fitness_level = st.slider("Nível de condicionamento (1-5)", 1, 5, 3)
+        plan_type = st.selectbox("Tipo de plano", ['Básico', 'Standard', 'Premium'])
+        monthly_fee = st.number_input("Mensalidade (R$)", min_value=0, max_value=500, value=100)
+        attended_group_classes = st.selectbox("Participa de aulas coletivas?", [0, 1], format_func=lambda x: 'Sim' if x==1 else 'Não')
+        pt_sessions = st.number_input("Sessões com personal trainer", min_value=0, max_value=50, value=0)
+
+    # Construir DataFrame
+    input_data = pd.DataFrame({
+        'age': [age],
+        'gender': [gender],
+        'membership_months': [membership_months],
+        'visits_per_week': [visits_per_week],
+        'avg_time_spent': [avg_time_spent],
+        'fitness_level': [fitness_level],
+        'plan_type': [plan_type],
+        'monthly_fee': [monthly_fee],
+        'attended_group_classes': [attended_group_classes],
+        'pt_sessions': [pt_sessions]
+    })
+
+    # Engenharia de features (se aplicável)
+    input_data['engagement_score'] = input_data['visits_per_week'] * input_data['avg_time_spent']
+    input_data['cost_per_visit'] = input_data['monthly_fee'] / (input_data['visits_per_week'] * 4 + 1e-6)
+    input_data['has_pt'] = (input_data['pt_sessions'] > 0).astype(int)
+
+    # Previsão
+    if st.button("Prever Renovação"):
+        proba = best_model.predict_proba(input_data)[0,1]
+        pred = best_model.predict(input_data)[0]
+
+        st.subheader("Resultado")
+        col1, col2 = st.columns(2)
+        col1.metric("Probabilidade de Renovação", f"{proba*100:.2f}%")
+        if pred == 1:
+            col2.success("Cliente com alta chance de renovar.")
+        else:
+            col2.error("Cliente com baixa chance de renovar.")
+
+        # Gauge chart
+        fig = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = proba * 100,
+            title = {'text': "Probabilidade de Renovação (%)"},
+            gauge = {
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "green" if proba > 0.5 else "red"},
+                'steps': [
+                    {'range': [0, 50], 'color': "lightcoral"},
+                    {'range': [50, 100], 'color': "lightgreen"}
+                ]
+            }
+        ))
+        st.plotly_chart(fig)

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Visão Geral{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Visão Geral do Dataset</h1>
+<p>Este dataset contém informações sobre clientes de uma academia. O objetivo é prever se o cliente renovará a assinatura.</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Total de Registros</h5>
+                <p class="display-6">{{ info.total_registros }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Taxa de Renovação</h5>
+                <p class="display-6">{{ "%.2f"|format(info.taxa_renovacao) }}%</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Número de Features</h5>
+                <p class="display-6">{{ info.num_features }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3>Amostra dos Dados</h3>
+<div class="table-responsive mb-4">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                {% for col in info.colunas %}
+                    <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in info.amostra %}
+            <tr>
+                {% for col in info.colunas %}
+                    <td>{{ row[col] }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<h3>Tipos de Dados</h3>
+<ul class="list-group">
+    {% for col, tipo in info.tipos.items() %}
+        <li class="list-group-item d-flex justify-content-between">
+            <strong>{{ col }}</strong><span class="text-muted">{{ tipo }}</span>
+        </li>
+    {% endfor %}
+</ul>
+{% endblock %}

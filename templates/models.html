@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Modelos{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Modelos de Machine Learning e Avaliação</h1>
+
+<h4>Comparação dos Modelos</h4>
+<div class="table-responsive mb-4">
+    <table class="table table-striped">
+        <thead class="table-dark">
+            <tr>
+                <th>Modelo</th>
+                <th>CV AUC (média)</th>
+                <th>CV AUC (std)</th>
+                <th>Test AUC</th>
+                <th>Accuracy</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, m in results.items() %}
+            <tr {% if name == best_name %}class="table-success"{% endif %}>
+                <td>{{ name }} {% if name == best_name %}⭐{% endif %}</td>
+                <td>{{ "%.4f"|format(m.cv_auc_mean) }}</td>
+                <td>{{ "%.4f"|format(m.cv_auc_std) }}</td>
+                <td>{{ "%.4f"|format(m.test_auc) }}</td>
+                <td>{{ "%.4f"|format(m.accuracy) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <h4>Matriz de Confusão ({{ best_name }})</h4>
+        <div id="cmChart" style="min-height:380px;width:100%;"></div>
+        <div id="cmErr" class="alert alert-danger d-none mt-2"></div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <h4>Curva ROC</h4>
+        <div id="rocChart" style="min-height:380px;width:100%;"></div>
+        <div id="rocErr" class="alert alert-danger d-none mt-2"></div>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<h4>Importância das Features</h4>
+<div id="impChart" style="min-height:500px;width:100%;"></div>
+<div id="impErr" class="alert alert-warning d-none mt-2"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    'use strict';
+
+    // Serialização segura: None -> null
+    const CM  = {{ cm_data   | tojson }};
+    const ROC = {{ roc_data  | tojson }};
+    const IMP = {{ importances | tojson }};
+
+    console.log('[models] dados recebidos:', { CM, ROC, IMP });
+
+    function showErr(divId, msg) {
+        const el = document.getElementById(divId);
+        if (el) { el.textContent = msg; el.classList.remove('d-none'); }
+    }
+
+    function init() {
+        // 1) Plotly carregou?
+        if (typeof Plotly === 'undefined') {
+            showErr('cmErr',  'Plotly não foi carregado. Verifique a conexão com o CDN cdn.plot.ly.');
+            showErr('rocErr', 'Plotly não foi carregado.');
+            showErr('impErr', 'Plotly não foi carregado.');
+            return;
+        }
+
+        // 2) Matriz de confusão
+        try {
+            if (CM && CM.matrix && CM.matrix.length) {
+                Plotly.newPlot('cmChart', [{
+                    z: CM.matrix,
+                    x: CM.labels,
+                    y: CM.labels,
+                    type: 'heatmap',
+                    colorscale: 'Blues',
+                    text: CM.matrix.map(r => r.map(String)),
+                    texttemplate: '%{text}',
+                    showscale: false
+                }], {
+                    height: 380,
+                    margin: { t: 20, l: 120, b: 60 }
+                });
+            } else {
+                showErr('cmErr', 'Dados da matriz de confusão indisponíveis.');
+            }
+        } catch (e) {
+            console.error('Erro matriz:', e);
+            showErr('cmErr', 'Erro ao renderizar matriz: ' + e.message);
+        }
+
+        // 3) Curva ROC
+        try {
+            if (ROC && ROC.fpr && ROC.tpr) {
+                Plotly.newPlot('rocChart', [
+                    { x: ROC.fpr, y: ROC.tpr, mode: 'lines',
+                      name: 'ROC (AUC=' + ROC.auc.toFixed(3) + ')',
+                      line: { color: '#2980b9', width: 3 } },
+                    { x: [0, 1], y: [0, 1], mode: 'lines',
+                      name: 'Aleatório',
+                      line: { dash: 'dash', color: '#7f8c8d' } }
+                ], {
+                    height: 380,
+                    xaxis: { title: 'Falsos Positivos' },
+                    yaxis: { title: 'Verdadeiros Positivos' },
+                    margin: { t: 20 }
+                });
+            } else {
+                showErr('rocErr', 'Dados da curva ROC indisponíveis.');
+            }
+        } catch (e) {
+            console.error('Erro ROC:', e);
+            showErr('rocErr', 'Erro ao renderizar ROC: ' + e.message);
+        }
+
+        // 4) Importância das features
+        try {
+            if (IMP && IMP.length) {
+                const features = IMP.map(x => x[0]);
+                const values   = IMP.map(x => x[1]);
+                Plotly.newPlot('impChart', [{
+                    x: values, y: features, type: 'bar', orientation: 'h',
+                    marker: { color: '#16a085' }
+                }], {
+                    height: 500,
+                    margin: { l: 180, t: 20 },
+                    yaxis: { autorange: 'reversed' }
+                });
+            } else {
+                showErr('impErr', 'Este modelo não expõe importâncias de features.');
+            }
+        } catch (e) {
+            console.error('Erro importâncias:', e);
+            showErr('impErr', 'Erro ao renderizar importâncias: ' + e.message);
+        }
+    }
+
+    // Espera o DOM estar pronto antes de rodar o Plotly
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+import joblib
+import pandas as pd
+
+# Colunas esperadas pelo modelo
+FEATURE_COLUMNS = [
+    'age', 'gender', 'membership_months', 'visits_per_week', 'avg_time_spent',
+    'fitness_level', 'plan_type', 'monthly_fee', 'attended_group_classes',
+    'pt_sessions'
+]
+
+_model = None
+
+def load_model(path='best_model.pkl'):
+    """Carrega o modelo salvo uma única vez (cache)."""
+    global _model
+    if _model is None:
+        _model = joblib.load(path)
+    return _model
+
+
+def prepare_input(data: dict) -> pd.DataFrame:
+    """
+    Recebe um dicionário vindo do formulário e retorna um DataFrame
+    pronto para o modelo (com features derivadas).
+    """
+    df = pd.DataFrame([data])
+
+    # Garante tipos numéricos
+    numeric = ['age', 'membership_months', 'visits_per_week', 'avg_time_spent',
+               'monthly_fee', 'pt_sessions', 'fitness_level', 'attended_group_classes']
+    for col in numeric:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Features derivadas (devem ser idênticas às do treino)
+    df['engagement_score'] = df['visits_per_week'] * df['avg_time_spent']
+    df['cost_per_visit'] = df['monthly_fee'] / (df['visits_per_week'] * 4 + 1e-6)
+    df['has_pt'] = (df['pt_sessions'] > 0).astype(int)
+
+    return df
+
+
+def predict(data: dict):
+    """Retorna (predição, probabilidade) para os dados fornecidos."""
+    model = load_model()
+    df = prepare_input(data)
+    pred = int(model.predict(df)[0])
+    proba = float(model.predict_proba(df)[0, 1])
+    return pred, proba

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Análise Exploratória{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Análise Exploratória de Dados</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <h4>Distribuição da Variável Alvo</h4>
+        <div id="targetChart"></div>
+    </div>
+    <div class="col-md-6">
+        <h4>Correlação entre Variáveis Numéricas</h4>
+        <div id="corrChart"></div>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<h4>Variáveis Numéricas vs Renovação</h4>
+<div class="mb-3">
+    <label for="numSelect" class="form-label">Selecione uma variável:</label>
+    <select id="numSelect" class="form-select">
+        {% for col in num_cols %}
+            <option value="{{ col }}">{{ col }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div id="boxChart"></div>
+
+<hr class="my-4">
+
+<h4>Variáveis Categóricas vs Renovação</h4>
+<div class="mb-3">
+    <label for="catSelect" class="form-label">Selecione uma variável:</label>
+    <select id="catSelect" class="form-select">
+        {% for col in cat_cols %}
+            <option value="{{ col }}">{{ col }}</option>
+        {% endfor %}
+    </select>
+</div>
+<div id="catChart"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const targetCounts = {{ target_counts | tojson }};
+    const boxData = {{ box_data | safe }};
+    const catData = {{ cat_data | safe }};
+    const corrData = {{ corr_data | safe }};
+
+    Plotly.newPlot('targetChart', [{
+        values: [targetCounts['0'] || 0, targetCounts['1'] || 0],
+        labels: ['Não Renovou', 'Renovou'],
+        type: 'pie',
+        marker: { colors: ['#e74c3c', '#2ecc71'] }
+    }], { height: 320, margin: { t: 20 } });
+
+    Plotly.newPlot('corrChart', [{
+        z: corrData.matrix,
+        x: corrData.labels,
+        y: corrData.labels,
+        type: 'heatmap',
+        colorscale: 'RdBu',
+        zmin: -1, zmax: 1
+    }], { height: 420, margin: { t: 20 } });
+
+    function updateBox(col) {
+        const d0 = boxData[col]['0'];
+        const d1 = boxData[col]['1'];
+        Plotly.newPlot('boxChart', [
+            { y: d0, name: 'Não Renovou', type: 'box', marker: { color: '#e74c3c' } },
+            { y: d1, name: 'Renovou',     type: 'box', marker: { color: '#2ecc71' } }
+        ], { height: 380, title: col, margin: { t: 40 } });
+    }
+    updateBox(document.getElementById('numSelect').value);
+    document.getElementById('numSelect').addEventListener('change', e => updateBox(e.target.value));
+
+    function updateCat(col) {
+        const data = catData[col];
+        const cats = Object.keys(data);
+        const nao = cats.map(c => (data[c]['0'] || 0));
+        const sim = cats.map(c => (data[c]['1'] || 0));
+        Plotly.newPlot('catChart', [
+            { x: cats, y: nao, name: 'Não Renovou', type: 'bar', marker: { color: '#e74c3c' } },
+            { x: cats, y: sim, name: 'Renovou',     type: 'bar', marker: { color: '#2ecc71' } }
+        ], { barmode: 'group', height: 380, title: col, margin: { t: 40 } });
+    }
+    updateCat(document.getElementById('catSelect').value);
+    document.getElementById('catSelect').addEventListener('change', e => updateCat(e.target.value));
+</script>
+{% endblock %}
